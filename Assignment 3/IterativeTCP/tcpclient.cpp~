@@ -1,0 +1,128 @@
+/* 
+ * tcpclient.c - A simple TCP client
+ * usage: tcpclient <host> <port>
+ */
+#include <stdio.h>
+#include <stdlib.h> //for atoi
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h> //for mode_t
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
+#include <fcntl.h> //for open
+#include <iostream>
+
+#define BUFSIZE 1024
+
+using namespace std;
+/* 
+ * error - wrapper for perror
+ */
+void error(char msg[100]) {
+    perror(msg);
+    exit(0);
+}
+
+int main(int argc, char **argv) {
+    int sockfd, portno, n;
+    struct sockaddr_in serveraddr;
+    struct hostent *server;
+    char *hostname;
+    char buf[BUFSIZE];
+    int fd;
+    mode_t mode;
+
+    /* check command line arguments */
+    if (argc != 4) {
+       fprintf(stderr,"usage: %s <hostname> <port> <filename>\n", argv[0]);
+       exit(0);
+    }
+    hostname = argv[1];
+    portno = atoi(argv[2]);
+
+    /* socket: create the socket */
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) 
+        error("ERROR opening socket\n");
+
+    /* gethostbyname: get the server's DNS entry */
+    server = gethostbyname(hostname);
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+        exit(0);
+    }
+
+    /* build the server's Internet address */
+    bzero((char *) &serveraddr, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, 
+	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
+    serveraddr.sin_port = htons(portno);
+    
+    fd = open(argv[3],O_RDONLY,S_IRUSR);
+	if(fd<0)
+	{
+		fprintf(stderr,"ERROR, opening file %s\n", argv[3]);
+        exit(0);
+	}
+	
+	long long int sizeoffile = 0;
+	int bytesread;
+	while(bytesread = read(fd,buf,1024))
+		sizeoffile+=bytesread;
+	close(fd);
+	
+	cout<<sizeoffile<<endl;
+	
+	//exit(0);
+	
+	fd = open(argv[3],O_RDONLY,S_IRUSR);
+	
+    /* connect: create a connection with the server */
+    if (connect(sockfd,(struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) 
+      error("ERROR connecting");
+
+    /* get message line from the user */
+    printf("Sending hello message\n");
+    
+    bzero(buf, BUFSIZE);
+    strcpy(buf,argv[3]);
+    strcat(buf," ");
+    char str[21];
+    sprintf(str,"%ld",sizeoffile);
+	strcat(buf,str);
+    /* send the message line to the server */
+    
+    cout<<buf<<endl;
+    
+    //exit(0);
+    
+    n = write(sockfd, buf, strlen(buf));
+    if (n < 0) 
+    	error("ERROR writing to socket\n");
+
+    /* print the server's reply */
+    bzero(buf, BUFSIZE);
+    n = read(sockfd, buf, BUFSIZE);
+    if (n < 0) 
+    	error("ERROR reading from socket\n");
+    if(strcmp(buf,"Hello"))
+    	error("ERROR server didn't send acknowledment \n");
+    printf("Server sends acknowledgement: %s\n",buf);
+    bzero(buf, BUFSIZE);
+    
+    
+    while(read(fd,buf,BUFSIZE))
+    {
+    	n = write(sockfd, buf, strlen(buf));
+    	if (n < 0) 
+    		error("ERROR writing to socket");
+    	bzero(buf, BUFSIZE);
+    }
+    
+    //Need to add checksum
+	close(sockfd);
+	close(fd);
+    return 0;
+}
